@@ -1,47 +1,86 @@
 "use client"
 
-import type React from "react"
-
 import { useState } from "react"
+import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card } from "@/components/ui/card"
 import { Eye, EyeOff } from "lucide-react"
+import { supabase } from "@/lib/supabaseClient"
 
 export function UserRegistrationForm() {
+  const router = useRouter()
   const [showPassword, setShowPassword] = useState(false)
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
+  const [error, setError] = useState("")
+  const [form, setForm] = useState({
+    name: "",
+    email: "",
+    phone: "",
+    password: "",
+    confirmPassword: "",
+  })
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setForm({ ...form, [e.target.id]: e.target.value })
+  }
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
+    setError("")
+
+    if (form.password !== form.confirmPassword) {
+      setError("As senhas não coincidem.")
+      return
+    }
+
     setIsLoading(true)
 
-    // Simulate API call
-    await new Promise((resolve) => setTimeout(resolve, 1500))
+    // 1️⃣ Cria o usuário no Supabase Auth
+    const { data, error: signUpError } = await supabase.auth.signUp({
+      email: form.email,
+      password: form.password,
+    })
 
-    // TODO: Implement actual registration logic
-    console.log("[v0] User registration form submitted")
+    if (signUpError) {
+      setError(signUpError.message)
+      setIsLoading(false)
+      return
+    }
+
+    // 2️⃣ Salva dados adicionais na tabela "usuarios"
+    if (data.user) {
+      await supabase.from("usuarios").insert([
+        {
+          id: data.user.id,
+          nome: form.name,
+          telefone: form.phone,
+        },
+      ])
+    }
+
     setIsLoading(false)
+    router.push("/login")
   }
 
   return (
-    <Card className="p-6">
+    <Card className="p-6 max-w-md mx-auto mt-10">
       <form onSubmit={handleSubmit} className="space-y-4">
         <div className="space-y-2">
           <Label htmlFor="name">Nome completo</Label>
-          <Input id="name" type="text" placeholder="João Silva" required />
+          <Input id="name" type="text" placeholder="João Silva" required value={form.name} onChange={handleChange} />
         </div>
 
         <div className="space-y-2">
           <Label htmlFor="email">Email</Label>
-          <Input id="email" type="email" placeholder="seu@email.com" required />
+          <Input id="email" type="email" placeholder="seu@email.com" required value={form.email} onChange={handleChange} />
         </div>
 
         <div className="space-y-2">
           <Label htmlFor="phone">Telefone</Label>
-          <Input id="phone" type="tel" placeholder="(11) 99999-9999" required />
+          <Input id="phone" type="tel" placeholder="(11) 99999-9999" value={form.phone} onChange={handleChange} />
         </div>
 
         <div className="space-y-2">
@@ -53,6 +92,8 @@ export function UserRegistrationForm() {
               placeholder="••••••••"
               required
               minLength={6}
+              value={form.password}
+              onChange={handleChange}
             />
             <button
               type="button"
@@ -74,6 +115,8 @@ export function UserRegistrationForm() {
               placeholder="••••••••"
               required
               minLength={6}
+              value={form.confirmPassword}
+              onChange={handleChange}
             />
             <button
               type="button"
@@ -84,6 +127,8 @@ export function UserRegistrationForm() {
             </button>
           </div>
         </div>
+
+        {error && <p className="text-red-500 text-sm">{error}</p>}
 
         <Button type="submit" className="w-full" disabled={isLoading}>
           {isLoading ? "Criando conta..." : "Criar conta"}
