@@ -10,7 +10,7 @@ export default function AgendamentoPage() {
   useEffect(() => {
     const isLoggedIn = localStorage.getItem("loggedIn") === "true"
     if (!isLoggedIn) {
-      router.replace("/login") // redireciona para login se não estiver logado
+      router.replace("/login") 
     }
   }, [router])
 
