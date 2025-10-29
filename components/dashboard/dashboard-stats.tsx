@@ -1,58 +1,57 @@
-import { Card } from "@/components/ui/card"
-import { Calendar, Users, DollarSign, TrendingUp } from "lucide-react"
+"use client"
 
-export function DashboardStats() {
-  const stats = [
-    {
-      title: "Agendamentos Hoje",
-      value: "24",
-      change: "+12%",
-      icon: Calendar,
-      color: "text-primary",
-      bgColor: "bg-primary/10",
-    },
-    {
-      title: "Novos Clientes",
-      value: "12",
-      change: "+8%",
-      icon: Users,
-      color: "text-accent",
-      bgColor: "bg-accent/10",
-    },
-    {
-      title: "Receita do Mês",
-      value: "R$ 8.450",
-      change: "+23%",
-      icon: DollarSign,
-      color: "text-secondary",
-      bgColor: "bg-secondary/10",
-    },
-    {
-      title: "Taxa de Ocupação",
-      value: "87%",
-      change: "+5%",
-      icon: TrendingUp,
-      color: "text-chart-1",
-      bgColor: "bg-chart-1/10",
-    },
-  ]
+import { useEffect, useState } from "react"
+import { supabase } from "@/lib/supabaseClient"
+import { Card } from "@/components/ui/card"
+
+export function DashboardStats({ empresaId }: { empresaId: string }) {
+  const [stats, setStats] = useState({
+    totalAgendamentos: 0,
+    totalServicos: 0,
+    totalClientes: 0,
+  })
+
+  useEffect(() => {
+    async function fetchStats() {
+      const { count: totalAgendamentos } = await supabase
+        .from("agendamentos")
+        .select("*", { count: "exact", head: true })
+        .eq("empresa_id", empresaId)
+
+      const { count: totalServicos } = await supabase
+        .from("servicos")
+        .select("*", { count: "exact", head: true })
+        .eq("empresa_id", empresaId)
+
+      const { count: totalClientes } = await supabase
+        .from("clientes")
+        .select("*", { count: "exact", head: true })
+        .eq("empresa_id", empresaId)
+
+      setStats({
+        totalAgendamentos: totalAgendamentos || 0,
+        totalServicos: totalServicos || 0,
+        totalClientes: totalClientes || 0,
+      })
+    }
+
+    fetchStats()
+  }, [empresaId])
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-      {stats.map((stat) => (
-        <Card key={stat.title} className="p-6">
-          <div className="flex items-center justify-between">
-            <div className="space-y-2">
-              <p className="text-sm text-muted-foreground">{stat.title}</p>
-              <p className="text-2xl font-bold text-card-foreground">{stat.value}</p>
-              <p className="text-xs text-green-600 font-medium">{stat.change} vs mês anterior</p>
-            </div>
-            <div className={`w-12 h-12 ${stat.bgColor} rounded-lg flex items-center justify-center`}>
-              <stat.icon className={`w-6 h-6 ${stat.color}`} />
-            </div>
-          </div>
-        </Card>
-      ))}
+    <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+      <Card className="p-6">
+        <h3 className="text-sm text-muted-foreground">Agendamentos</h3>
+        <p className="text-3xl font-bold">{stats.totalAgendamentos}</p>
+      </Card>
+      <Card className="p-6">
+        <h3 className="text-sm text-muted-foreground">Serviços</h3>
+        <p className="text-3xl font-bold">{stats.totalServicos}</p>
+      </Card>
+      <Card className="p-6">
+        <h3 className="text-sm text-muted-foreground">Clientes</h3>
+        <p className="text-3xl font-bold">{stats.totalClientes}</p>
+      </Card>
     </div>
   )
 }

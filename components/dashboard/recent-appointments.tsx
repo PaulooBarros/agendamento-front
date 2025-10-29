@@ -1,107 +1,51 @@
+"use client"
+
+import { useEffect, useState } from "react"
+import { supabase } from "@/lib/supabaseClient"
 import { Card } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
-import { Calendar, Clock, User } from "lucide-react"
 
-export function RecentAppointments() {
-  const appointments = [
-    {
-      id: 1,
-      client: "Maria Silva",
-      service: "Corte e Escova",
-      professional: "Ana Costa",
-      date: "Hoje",
-      time: "14:00",
-      status: "confirmed",
-    },
-    {
-      id: 2,
-      client: "João Santos",
-      service: "Barba",
-      professional: "Carlos Lima",
-      date: "Hoje",
-      time: "15:30",
-      status: "confirmed",
-    },
-    {
-      id: 3,
-      client: "Paula Oliveira",
-      service: "Manicure",
-      professional: "Beatriz Souza",
-      date: "Amanhã",
-      time: "10:00",
-      status: "pending",
-    },
-    {
-      id: 4,
-      client: "Roberto Alves",
-      service: "Corte Masculino",
-      professional: "Carlos Lima",
-      date: "Amanhã",
-      time: "11:30",
-      status: "confirmed",
-    },
-  ]
+export function RecentAppointments({ empresaId }: { empresaId: string }) {
+  const [appointments, setAppointments] = useState<any[]>([])
 
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case "confirmed":
-        return <Badge className="bg-green-500/10 text-green-700 hover:bg-green-500/20">Confirmado</Badge>
-      case "pending":
-        return <Badge className="bg-yellow-500/10 text-yellow-700 hover:bg-yellow-500/20">Pendente</Badge>
-      case "cancelled":
-        return <Badge className="bg-red-500/10 text-red-700 hover:bg-red-500/20">Cancelado</Badge>
-      default:
-        return <Badge variant="secondary">{status}</Badge>
+  useEffect(() => {
+    async function fetchRecentAppointments() {
+      const { data, error } = await supabase
+        .from("agendamentos")
+        .select("id, data, hora, clientes(nome), servicos(nome)")
+        .eq("empresa_id", empresaId)
+        .order("data", { ascending: false })
+        .limit(5)
+
+      if (error) {
+        console.error("Erro ao buscar agendamentos:", error.message)
+      } else {
+        setAppointments(data || [])
+      }
     }
+
+    fetchRecentAppointments()
+  }, [empresaId])
+
+  if (appointments.length === 0) {
+    return <p className="text-muted-foreground">Nenhum agendamento recente.</p>
   }
 
   return (
-    <div>
-      <div className="flex items-center justify-between mb-4">
-        <h2 className="text-xl font-semibold text-foreground">Próximos Agendamentos</h2>
-        <Button variant="outline" size="sm">
-          Ver todos
-        </Button>
-      </div>
-
-      <Card className="divide-y divide-border">
-        {appointments.map((appointment) => (
-          <div key={appointment.id} className="p-6 hover:bg-muted/50 transition-colors">
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-              <div className="space-y-2 flex-1">
-                <div className="flex items-center gap-2">
-                  <h3 className="font-semibold text-card-foreground">{appointment.client}</h3>
-                  {getStatusBadge(appointment.status)}
-                </div>
-                <p className="text-sm text-muted-foreground">{appointment.service}</p>
-                <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
-                  <div className="flex items-center gap-1">
-                    <User className="w-4 h-4" />
-                    <span>{appointment.professional}</span>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <Calendar className="w-4 h-4" />
-                    <span>{appointment.date}</span>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <Clock className="w-4 h-4" />
-                    <span>{appointment.time}</span>
-                  </div>
-                </div>
-              </div>
-              <div className="flex gap-2">
-                <Button variant="outline" size="sm">
-                  Detalhes
-                </Button>
-                <Button variant="ghost" size="sm">
-                  Cancelar
-                </Button>
-              </div>
+    <Card className="p-6 space-y-4">
+      <h3 className="text-lg font-semibold text-foreground">Agendamentos Recentes</h3>
+      <ul className="space-y-3">
+        {appointments.map((a) => (
+          <li key={a.id} className="flex justify-between border-b border-border pb-2">
+            <div>
+              <p className="font-medium">{a.servicos?.nome}</p>
+              <p className="text-sm text-muted-foreground">{a.clientes?.nome}</p>
             </div>
-          </div>
+            <span className="text-sm text-muted-foreground">
+              {a.data} — {a.hora}
+            </span>
+          </li>
         ))}
-      </Card>
-    </div>
+      </ul>
+    </Card>
   )
 }
