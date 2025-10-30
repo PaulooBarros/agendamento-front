@@ -12,6 +12,9 @@ import {
   LayoutDashboard,
   User,
   Briefcase,
+  Clock,
+  Users,
+  Wrench,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { supabase } from "@/lib/supabaseClient"
@@ -28,46 +31,60 @@ export function Header() {
   const [user, setUser] = useState<UserProfile | null>(null)
   const [loading, setLoading] = useState(true)
 
-  // 🔹 Carrega sessão e identifica tipo de usuário
   useEffect(() => {
-    async function loadUser() {
-      setLoading(true)
-      const { data: sessionData } = await supabase.auth.getSession()
-      const session = sessionData?.session
+    const loadUser = async () => {
+      try {
+        const { data: sessionData } = await supabase.auth.getSession()
+        const session = sessionData?.session
 
-      if (session?.user) {
-        const userId = session.user.id
-
-        // Verifica se é empresa
-        const { data: empresa } = await supabase
-          .from("empresas")
-          .select("id, nome")
-          .eq("admin_id", userId)
-          .single()
-
-        if (empresa) {
-          setUser({ nome: empresa.nome, tipo: "empresa", empresa_id: empresa.id })
+        if (!session?.user) {
+          setUser(null)
           setLoading(false)
           return
         }
 
-        // Se não for empresa, verifica se é usuário comum
+        const userId = session.user.id
+
+        // 1️⃣ Verifica se é uma empresa
+        const { data: empresa } = await supabase
+          .from("empresas")
+          .select("id, nome")
+          .eq("admin_id", userId)
+          .maybeSingle()
+
+        if (empresa) {
+          setUser({
+            nome: empresa.nome,
+            tipo: "empresa",
+            empresa_id: empresa.id,
+          })
+          setLoading(false)
+          return
+        }
+
+        // 2️⃣ Verifica se é um usuário comum
         const { data: usuario } = await supabase
           .from("usuarios")
           .select("nome")
           .eq("id", userId)
-          .single()
+          .maybeSingle()
 
         if (usuario) {
-          setUser({ nome: usuario.nome, tipo: "usuario" })
+          setUser({
+            nome: usuario.nome,
+            tipo: "usuario",
+          })
         } else {
-          setUser({ nome: session.user.email || "Usuário" })
+          setUser({
+            nome: session.user.email || "Usuário",
+            tipo: "usuario",
+          })
         }
-      } else {
-        setUser(null)
+      } catch (err) {
+        console.error("Erro ao carregar sessão:", err)
+      } finally {
+        setLoading(false)
       }
-
-      setLoading(false)
     }
 
     loadUser()
@@ -79,18 +96,104 @@ export function Header() {
     return () => subscription.unsubscribe()
   }, [])
 
-  // 🔹 Logout forçado (limpa sessão do Supabase + localStorage)
   const handleLogout = async () => {
-    try {
-      await supabase.auth.signOut({ scope: "local" })
-      localStorage.clear()
-      setUser(null)
-      router.refresh()
-      router.push("/")
-    } catch (err) {
-      console.error("Erro ao deslogar:", err)
-    }
+    await supabase.auth.signOut({ scope: "local" })
+    localStorage.clear()
+    setUser(null)
+    router.refresh()
+    router.push("/")
   }
+
+  const renderEmpresaMenu = () => (
+    <>
+      <Link
+        href={`/empresas/${user?.empresa_id}/dashboard`}
+        className="flex items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground"
+      >
+        <LayoutDashboard className="w-4 h-4" />
+        Dashboard
+      </Link>
+
+      <Link
+        href={`/empresas/${user?.empresa_id}/dashboard/servicos`}
+        className="flex items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground"
+      >
+        <Wrench className="w-4 h-4" />
+        Serviços
+      </Link>
+
+      <Link
+        href={`/empresas/${user?.empresa_id}/dashboard/funcionarios`}
+        className="flex items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground"
+      >
+        <Users className="w-4 h-4" />
+        Funcionários
+      </Link>
+
+      <Link
+        href={`/empresas/${user?.empresa_id}/dashboard/agendamentos`}
+        className="flex items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground"
+      >
+        <Calendar className="w-4 h-4" />
+        Agendamentos
+      </Link>
+
+      <Link
+        href={`/empresas/${user?.empresa_id}/dashboard/horarios`}
+        className="flex items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground"
+      >
+        <Clock className="w-4 h-4" />
+        Horários
+      </Link>
+    </>
+  )
+
+  const renderUsuarioMenu = () => (
+    <>
+      <Link
+        href="/buscar"
+        className="flex items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground"
+      >
+        <Calendar className="w-4 h-4" />
+        Buscar Serviços
+      </Link>
+
+      <Link
+        href="/agendamentos"
+        className="flex items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground"
+      >
+        <Clock className="w-4 h-4" />
+        Meus Agendamentos
+      </Link>
+
+      <Link
+        href="/perfil"
+        className="flex items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground"
+      >
+        <User className="w-4 h-4" />
+        Meu Perfil
+      </Link>
+    </>
+  )
+
+  const renderNaoLogadoMenu = () => (
+    <>
+      <Link
+        href="/empresas"
+        className="flex items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground"
+      >
+        <Building2 className="w-4 h-4" />
+        Para Empresas
+      </Link>
+      <Link
+        href="/buscar"
+        className="flex items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground"
+      >
+        <Calendar className="w-4 h-4" />
+        Buscar Serviços
+      </Link>
+    </>
+  )
 
   return (
     <header className="sticky top-0 z-50 w-full border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
@@ -107,40 +210,19 @@ export function Header() {
           {/* Navegação Desktop */}
           {!loading && (
             <nav className="hidden md:flex items-center gap-6">
-              {user?.tipo === "empresa" ? (
-                <Link
-                  href={`/empresas/${user.empresa_id}/dashboard`}
-                  className="text-sm font-medium text-muted-foreground hover:text-foreground flex items-center gap-2 transition-colors"
-                >
-                  <Briefcase className="w-4 h-4" />
-                  Minha Empresa
-                </Link>
-              ) : (
-                <>
-                  <Link
-                    href="/empresas"
-                    className="text-sm font-medium text-muted-foreground hover:text-foreground flex items-center gap-2 transition-colors"
-                  >
-                    <Building2 className="w-4 h-4" />
-                    Para Empresas
-                  </Link>
-                  <Link
-                    href="/buscar"
-                    className="text-sm font-medium text-muted-foreground hover:text-foreground flex items-center gap-2 transition-colors"
-                  >
-                    <Calendar className="w-4 h-4" />
-                    Agendar
-                  </Link>
-                </>
-              )}
+              {user?.tipo === "empresa"
+                ? renderEmpresaMenu()
+                : user?.tipo === "usuario"
+                ? renderUsuarioMenu()
+                : renderNaoLogadoMenu()}
             </nav>
           )}
 
-          {/* Área de Autenticação Desktop */}
+          {/* Botões de autenticação */}
           <div className="hidden md:flex items-center gap-3">
             {user ? (
               <>
-                <span className="text-sm font-medium text-foreground flex items-center gap-1">
+                <span className="flex items-center gap-1 text-sm font-medium text-foreground">
                   {user.tipo === "empresa" ? (
                     <>
                       <Briefcase className="w-4 h-4 text-primary" />
@@ -153,19 +235,6 @@ export function Header() {
                     </>
                   )}
                 </span>
-
-                {user.tipo === "empresa" && user.empresa_id && (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() =>
-                      router.push(`/empresas/${user.empresa_id}/dashboard`)
-                    }
-                  >
-                    <LayoutDashboard className="w-4 h-4 mr-1" />
-                    Painel
-                  </Button>
-                )}
 
                 <Button variant="ghost" size="sm" onClick={handleLogout}>
                   <LogOut className="w-4 h-4 mr-1" />
@@ -186,7 +255,7 @@ export function Header() {
             )}
           </div>
 
-          {/* Botão do menu mobile */}
+          {/* Menu Mobile */}
           <button
             className="md:hidden p-2 text-muted-foreground hover:text-foreground"
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
@@ -199,35 +268,11 @@ export function Header() {
         {mobileMenuOpen && !loading && (
           <div className="md:hidden py-4 border-t border-border">
             <nav className="flex flex-col gap-4">
-              {user?.tipo === "empresa" ? (
-                <Link
-                  href={`/empresas/${user.empresa_id}/dashboard`}
-                  className="text-sm font-medium text-muted-foreground hover:text-foreground flex items-center gap-2 py-2"
-                  onClick={() => setMobileMenuOpen(false)}
-                >
-                  <LayoutDashboard className="w-4 h-4" />
-                  Minha Empresa
-                </Link>
-              ) : (
-                <>
-                  <Link
-                    href="/empresas"
-                    className="text-sm font-medium text-muted-foreground hover:text-foreground flex items-center gap-2 py-2"
-                    onClick={() => setMobileMenuOpen(false)}
-                  >
-                    <Building2 className="w-4 h-4" />
-                    Para Empresas
-                  </Link>
-                  <Link
-                    href="/buscar"
-                    className="text-sm font-medium text-muted-foreground hover:text-foreground flex items-center gap-2 py-2"
-                    onClick={() => setMobileMenuOpen(false)}
-                  >
-                    <Calendar className="w-4 h-4" />
-                    Agendar
-                  </Link>
-                </>
-              )}
+              {user?.tipo === "empresa"
+                ? renderEmpresaMenu()
+                : user?.tipo === "usuario"
+                ? renderUsuarioMenu()
+                : renderNaoLogadoMenu()}
 
               <div className="flex flex-col gap-2 pt-4 border-t border-border">
                 {user ? (
@@ -245,8 +290,14 @@ export function Header() {
                         </>
                       )}
                     </span>
-
-                    <Button variant="ghost" size="sm" onClick={handleLogout}>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        setMobileMenuOpen(false)
+                        handleLogout()
+                      }}
+                    >
                       <LogOut className="w-4 h-4 mr-1" />
                       Sair
                     </Button>
