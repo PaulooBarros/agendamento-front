@@ -1,56 +1,110 @@
 "use client"
 
-import { Card } from "@/components/ui/card"
-import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Slider } from "@/components/ui/slider"
 import { Button } from "@/components/ui/button"
-import { Search } from "lucide-react"
+import { ArrowUpDown } from "lucide-react"
 
-export function SearchFilters() {
+interface SearchFiltersProps {
+  filters: {
+    search: string
+    city: string
+    maxPrice: number
+    orderBy: string
+    orderDirection: string
+  }
+  onChange: (filters: any) => void
+}
+
+export function SearchFilters({ filters, onChange }: SearchFiltersProps) {
+  const handleChange = (field: string, value: any) => {
+    onChange({ ...filters, [field]: value })
+  }
+
   return (
-    <Card className="p-6 space-y-6 sticky top-20">
-      <div>
-        <h2 className="text-lg font-semibold text-card-foreground mb-4">Filtros</h2>
+    <div className="space-y-6 bg-card p-6 rounded-lg shadow-sm border">
+      <div className="space-y-2">
+        <Label>Buscar Serviço</Label>
+        <Input
+          placeholder="Ex: corte, manicure..."
+          value={filters.search}
+          onChange={(e) => handleChange("search", e.target.value)}
+        />
       </div>
 
       <div className="space-y-2">
-        <Label htmlFor="search">Buscar</Label>
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-          <Input id="search" placeholder="Nome do estabelecimento" className="pl-9" />
-        </div>
+        <Label>Cidade</Label>
+        <Input
+          placeholder="Digite a cidade"
+          value={filters.city}
+          onChange={(e) => handleChange("city", e.target.value)}
+        />
       </div>
 
       <div className="space-y-2">
-        <Label htmlFor="location">Localização</Label>
-        <Input id="location" placeholder="Cidade ou bairro" />
-      </div>
-
-      <div className="space-y-3">
-        <Label>Categoria</Label>
-        <div className="space-y-2">
-          {["Salão de Beleza", "Barbearia", "Estética", "Spa", "Manicure"].map((category) => (
-            <label key={category} className="flex items-center gap-2 cursor-pointer">
-              <input type="checkbox" className="rounded border-border" />
-              <span className="text-sm text-muted-foreground">{category}</span>
-            </label>
-          ))}
-        </div>
+        <Label>Preço Máximo</Label>
+        <Slider
+          value={[filters.maxPrice]}
+          onValueChange={(val) => handleChange("maxPrice", val[0])}
+          max={1000}
+          step={10}
+        />
+        <p className="text-sm text-muted-foreground">
+          Até R$ {filters.maxPrice}
+        </p>
       </div>
 
       <div className="space-y-2">
-        <Label>Faixa de Preço</Label>
-        <div className="space-y-2">
-          {["Até R$ 50", "R$ 50 - R$ 100", "R$ 100 - R$ 200", "Acima de R$ 200"].map((range) => (
-            <label key={range} className="flex items-center gap-2 cursor-pointer">
-              <input type="radio" name="price" className="border-border" />
-              <span className="text-sm text-muted-foreground">{range}</span>
-            </label>
-          ))}
-        </div>
+        <Label>Ordenar Por</Label>
+        <Button
+          variant="outline"
+          className="w-full flex items-center justify-between"
+          onClick={() =>
+            handleChange(
+              "orderBy",
+              filters.orderBy === "preco" ? "duracao_minutos" : "preco"
+            )
+          }
+        >
+          {filters.orderBy === "preco" ? "Preço" : "Duração"}
+          <ArrowUpDown className="w-4 h-4 ml-1" />
+        </Button>
       </div>
 
-      <Button className="w-full">Aplicar Filtros</Button>
-    </Card>
+      <div className="space-y-2">
+        <Label>Ordem</Label>
+        <Button
+          variant="outline"
+          className="w-full"
+          onClick={() =>
+            handleChange(
+              "orderDirection",
+              filters.orderDirection === "asc" ? "desc" : "asc"
+            )
+          }
+        >
+          {filters.orderDirection === "asc"
+            ? "⬆️ Crescente"
+            : "⬇️ Decrescente"}
+        </Button>
+      </div>
+
+      <Button
+        className="w-full mt-2"
+        variant="secondary"
+        onClick={() =>
+          onChange({
+            search: "",
+            city: "",
+            maxPrice: 500,
+            orderBy: "preco",
+            orderDirection: "asc",
+          })
+        }
+      >
+        Limpar Filtros
+      </Button>
+    </div>
   )
 }

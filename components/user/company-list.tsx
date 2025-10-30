@@ -1,16 +1,22 @@
 "use client"
 
 import Link from "next/link"
+import { useEffect, useState } from "react"
+import { useRouter } from "next/navigation"
+import { motion, AnimatePresence } from "framer-motion"
+import { supabase } from "@/lib/supabaseClient"
+import {
+  MapPin,
+  Star,
+  Clock,
+  Loader2,
+  LayoutGrid,
+  List,
+} from "lucide-react"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { MapPin, Star, Clock, Loader2, Search, SlidersHorizontal } from "lucide-react"
-import { useEffect, useState } from "react"
-import { useRouter } from "next/navigation"
-import { supabase } from "@/lib/supabaseClient"
-import { Input } from "@/components/ui/input"
-import { Slider } from "@/components/ui/slider"
-import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover"
+import { cn } from "@/lib/utils"
 
 interface Servico {
   id: string
@@ -27,15 +33,12 @@ interface Servico {
   }
 }
 
-export function CompanyList() {
+export function CompanyList({ filters }: { filters: any }) {
   const router = useRouter()
   const [isLoggedIn, setIsLoggedIn] = useState(false)
   const [servicos, setServicos] = useState<Servico[]>([])
   const [loading, setLoading] = useState(true)
-  const [search, setSearch] = useState("")
-  const [city, setCity] = useState("")
-  const [maxPrice, setMaxPrice] = useState(500)
-  const [openFilter, setOpenFilter] = useState(false)
+  const [layout, setLayout] = useState<"grid" | "list">("grid")
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -45,46 +48,45 @@ export function CompanyList() {
 
   useEffect(() => {
     fetchServicos()
-  }, [search, city, maxPrice])
+  }, [filters])
 
-  // 🔹 Buscar serviços com filtros dinâmicos
   async function fetchServicos() {
     setLoading(true)
-
     let query = supabase
       .from("servicos")
-      .select(
-        `
-        id,
-        nome,
-        descricao,
-        preco,
-        duracao_minutos,
-        ativo,
-        empresa:empresa_id (
-          id,
-          nome,
-          cidade,
-          estado
-        )
-      `
-      )
+      .select(`
+                id,
+                nome,
+                descricao,
+                preco,
+                duracao_minutos,
+                ativo,
+                empresa:empresa_id (
+                  id,
+                  nome,
+                  cidade,
+                  estado
+                )
+              `)
+
+
       .eq("ativo", true)
-      .lte("preco", maxPrice)
-      .order("nome", { ascending: true })
+      .lte("preco", filters.maxPrice)
+      .order(filters.orderBy, {
+        ascending: filters.orderDirection === "asc",
+      })
 
-    if (search.trim() !== "") {
-      query = query.ilike("nome", `%${search}%`)
-    }
+    if (filters.search.trim() !== "")
+      query = query.ilike("nome", `%${filters.search}%`)
 
-    if (city.trim() !== "") {
-      query = query.ilike("empresa.cidade", `%${city}%`)
-    }
+    if (filters.city.trim() !== "")
+      query = query.ilike("empresa.cidade", `%${filters.city}%`)
 
     const { data, error } = await query
 
     if (error) {
       console.error("Erro ao buscar serviços:", error.message)
+      setServicos([])
     } else {
       setServicos(data || [])
     }
@@ -92,9 +94,10 @@ export function CompanyList() {
     setLoading(false)
   }
 
-  const handleAgendar = (empresaId: string) => {
+  const handleAgendar = (empresaId: string, servicoId: string) => {
     if (isLoggedIn) {
-      router.push(`/empresas/${empresaId}/agendar`)
+      // Novo fluxo: vai para página de agendamento com o serviço pré-selecionado
+      router.push(`/empresas/${empresaId}/agendar?servico=${servicoId}`)
     } else {
       router.push("/login")
     }
@@ -102,62 +105,35 @@ export function CompanyList() {
 
   return (
     <div className="space-y-6">
-      {/* 🔍 Barra de Busca + Filtros */}
-      <div className="flex flex-col md:flex-row items-center justify-between gap-3">
-        <div className="relative w-full md:w-1/2">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-          <Input
-            type="text"
-            placeholder="Buscar por nome do serviço..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="pl-9"
-          />
-        </div>
+      {/* Barra superior */}
+      <div className="flex justify-between items-center">
+        <p className="text-sm text-muted-foreground">
+          {loading
+            ? ""
+            : `${servicos.length} serviço${servicos.length !== 1 ? "s" : ""} encontrado${servicos.length !== 1 ? "s" : ""}`}
+        </p>
 
-        <div className="flex items-center gap-2">
-          <Popover open={openFilter} onOpenChange={setOpenFilter}>
-            <PopoverTrigger asChild>
-              <Button variant="outline" className="flex items-center gap-2">
-                <SlidersHorizontal className="w-4 h-4" />
-                Filtros
-              </Button>
-            </PopoverTrigger>
-
-            <PopoverContent className="w-72 p-4 space-y-4">
-              <div>
-                <label className="text-sm font-medium">Cidade</label>
-                <Input
-                  placeholder="Digite a cidade"
-                  value={city}
-                  onChange={(e) => setCity(e.target.value)}
-                  className="mt-1"
-                />
-              </div>
-
-              <div>
-                <label className="text-sm font-medium flex justify-between">
-                  <span>Preço Máximo</span>
-                  <span className="text-primary font-semibold">R$ {maxPrice}</span>
-                </label>
-                <Slider
-                  value={[maxPrice]}
-                  onValueChange={(val) => setMaxPrice(val[0])}
-                  max={1000}
-                  step={10}
-                  className="mt-2"
-                />
-              </div>
-
-              <Button className="w-full mt-2" onClick={() => setOpenFilter(false)}>
-                Aplicar Filtros
-              </Button>
-            </PopoverContent>
-          </Popover>
-        </div>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => setLayout(layout === "grid" ? "list" : "grid")}
+          className="flex items-center gap-2"
+        >
+          {layout === "grid" ? (
+            <>
+              <List className="w-4 h-4" />
+              Lista
+            </>
+          ) : (
+            <>
+              <LayoutGrid className="w-4 h-4" />
+              Grade
+            </>
+          )}
+        </Button>
       </div>
 
-      {/* 🔄 Status de carregamento */}
+      {/* Estado de carregamento */}
       {loading ? (
         <div className="flex justify-center items-center py-20">
           <Loader2 className="animate-spin w-8 h-8 text-muted-foreground" />
@@ -167,27 +143,58 @@ export function CompanyList() {
           Nenhum serviço encontrado.
         </div>
       ) : (
-        <>
-          <p className="text-sm text-muted-foreground">
-            {servicos.length} serviços encontrados
-          </p>
-
-          <div className="grid gap-6">
-            {servicos.map((servico) => (
-              <Card
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={layout}
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            transition={{ duration: 0.4 }}
+            className={cn(
+              "gap-6",
+              layout === "grid"
+                ? "grid sm:grid-cols-2 lg:grid-cols-3"
+                : "flex flex-col"
+            )}
+          >
+            {servicos.map((servico, index) => (
+              <motion.div
                 key={servico.id}
-                className="overflow-hidden hover:shadow-lg transition-shadow"
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{
+                  delay: index * 0.05,
+                  duration: 0.4,
+                  ease: "easeOut",
+                }}
               >
-                <div className="grid md:grid-cols-3 gap-6">
-                  <div className="md:col-span-1">
+                <Card
+                  className={cn(
+                    "overflow-hidden hover:shadow-lg transition-shadow",
+                    layout === "list" && "flex items-center"
+                  )}
+                >
+                  {/* Imagem */}
+                  <div
+                    className={cn(
+                      layout === "list" ? "w-40 h-40" : "w-full h-52",
+                      "shrink-0"
+                    )}
+                  >
                     <img
                       src="/placeholder.svg"
                       alt={servico.nome}
-                      className="w-full h-full object-cover min-h-[200px]"
+                      className="w-full h-full object-cover"
                     />
                   </div>
 
-                  <div className="md:col-span-2 p-6 space-y-4">
+                  {/* Conteúdo */}
+                  <div
+                    className={cn(
+                      "p-6 space-y-4 flex-1",
+                      layout === "list" && "p-4"
+                    )}
+                  >
                     <div className="space-y-2">
                       <div className="flex items-start justify-between gap-4">
                         <div>
@@ -232,7 +239,7 @@ export function CompanyList() {
                       </div>
                     </div>
 
-                    <div className="flex gap-2">
+                    <div className="flex gap-2 pt-2">
                       <Button asChild className="flex-1">
                         <Link href={`/empresas/${servico.empresa?.id}`}>
                           Ver Detalhes
@@ -242,17 +249,19 @@ export function CompanyList() {
                       <Button
                         variant="outline"
                         className="flex-1 bg-transparent"
-                        onClick={() => handleAgendar(servico.empresa?.id)}
+                        onClick={() =>
+                          handleAgendar(servico.empresa?.id, servico.id)
+                        }
                       >
                         {isLoggedIn ? "Agendar Agora" : "Login para Agendar"}
                       </Button>
                     </div>
                   </div>
-                </div>
-              </Card>
+                </Card>
+              </motion.div>
             ))}
-          </div>
-        </>
+          </motion.div>
+        </AnimatePresence>
       )}
     </div>
   )
