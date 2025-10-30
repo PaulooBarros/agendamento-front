@@ -1,7 +1,7 @@
 "use client"
 
 import Link from "next/link"
-import { useEffect, useState } from "react"
+import { useEffect, useState, useCallback } from "react"
 import { useRouter } from "next/navigation"
 import {
   Building2,
@@ -15,13 +15,24 @@ import {
   Clock,
   Users,
   Wrench,
+  Settings,
 } from "lucide-react"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
 import { supabase } from "@/lib/supabaseClient"
 
 interface UserProfile {
   nome?: string
   tipo?: "usuario" | "empresa"
+  email?: string
   empresa_id?: string
 }
 
@@ -29,119 +40,98 @@ export function Header() {
   const router = useRouter()
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [user, setUser] = useState<UserProfile | null>(null)
-  const [loading, setLoading] = useState(true)
+  const [authLoaded, setAuthLoaded] = useState(false)
 
-  useEffect(() => {
-    const loadUser = async () => {
-      try {
-        const { data: sessionData } = await supabase.auth.getSession()
-        const session = sessionData?.session
+  const loadUser = useCallback(async () => {
+    try {
+      const { data: sessionData } = await supabase.auth.getSession()
+      const session = sessionData?.session
 
-        if (!session?.user) {
-          setUser(null)
-          setLoading(false)
-          return
-        }
-
-        const userId = session.user.id
-
-        // 1️⃣ Verifica se é uma empresa
-        const { data: empresa } = await supabase
-          .from("empresas")
-          .select("id, nome")
-          .eq("admin_id", userId)
-          .maybeSingle()
-
-        if (empresa) {
-          setUser({
-            nome: empresa.nome,
-            tipo: "empresa",
-            empresa_id: empresa.id,
-          })
-          setLoading(false)
-          return
-        }
-
-        // 2️⃣ Verifica se é um usuário comum
-        const { data: usuario } = await supabase
-          .from("usuarios")
-          .select("nome")
-          .eq("id", userId)
-          .maybeSingle()
-
-        if (usuario) {
-          setUser({
-            nome: usuario.nome,
-            tipo: "usuario",
-          })
-        } else {
-          setUser({
-            nome: session.user.email || "Usuário",
-            tipo: "usuario",
-          })
-        }
-      } catch (err) {
-        console.error("Erro ao carregar sessão:", err)
-      } finally {
-        setLoading(false)
+      if (!session?.user) {
+        setUser(null)
+        setAuthLoaded(true)
+        return
       }
+
+      const userId = session.user.id
+
+      // Verifica se é empresa
+      const { data: empresa } = await supabase
+        .from("empresas")
+        .select("id, nome")
+        .eq("admin_id", userId)
+        .maybeSingle()
+
+      if (empresa) {
+        setUser({
+          nome: empresa.nome,
+          tipo: "empresa",
+          empresa_id: empresa.id,
+          email: session.user.email || "",
+        })
+        setAuthLoaded(true)
+        return
+      }
+
+      // Caso contrário, é usuário comum
+      const { data: usuario } = await supabase
+        .from("usuarios")
+        .select("nome")
+        .eq("id", userId)
+        .maybeSingle()
+
+      setUser({
+        nome: usuario?.nome || session.user.email || "Usuário",
+        tipo: "usuario",
+        email: session.user.email || "",
+      })
+    } catch (err) {
+      console.error("Erro ao carregar sessão:", err)
+    } finally {
+      setAuthLoaded(true)
     }
-
-    loadUser()
-
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange(() => loadUser())
-
-    return () => subscription.unsubscribe()
   }, [])
 
+  useEffect(() => {
+    loadUser()
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_e, session) => {
+      if (session?.user) loadUser()
+      else setUser(null)
+    })
+    return () => subscription.unsubscribe()
+  }, [loadUser])
+
   const handleLogout = async () => {
-    await supabase.auth.signOut({ scope: "local" })
-    localStorage.clear()
-    setUser(null)
-    router.refresh()
-    router.push("/")
+    try {
+      await supabase.auth.signOut()
+      setUser(null)
+      localStorage.clear()
+      router.push("/")
+      router.refresh()
+    } catch (error) {
+      console.error("Erro ao deslogar:", error)
+    }
   }
 
   const renderEmpresaMenu = () => (
     <>
-      <Link
-        href={`/empresas/${user?.empresa_id}/dashboard`}
-        className="flex items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground"
-      >
+      <Link href={`/empresas/${user?.empresa_id}/dashboard`} className="flex items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground">
         <LayoutDashboard className="w-4 h-4" />
         Dashboard
       </Link>
-
-      <Link
-        href={`/empresas/${user?.empresa_id}/dashboard/servicos`}
-        className="flex items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground"
-      >
+      <Link href={`/empresas/${user?.empresa_id}/dashboard/servicos`} className="flex items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground">
         <Wrench className="w-4 h-4" />
         Serviços
       </Link>
-
-      <Link
-        href={`/empresas/${user?.empresa_id}/dashboard/funcionarios`}
-        className="flex items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground"
-      >
+      <Link href={`/empresas/${user?.empresa_id}/dashboard/funcionarios`} className="flex items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground">
         <Users className="w-4 h-4" />
         Funcionários
       </Link>
-
-      <Link
-        href={`/empresas/${user?.empresa_id}/dashboard/agendamentos`}
-        className="flex items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground"
-      >
+      <Link href={`/empresas/${user?.empresa_id}/dashboard/agendamentos`} className="flex items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground">
         <Calendar className="w-4 h-4" />
         Agendamentos
       </Link>
-
-      <Link
-        href={`/empresas/${user?.empresa_id}/dashboard/horarios`}
-        className="flex items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground"
-      >
+      <Link href={`/empresas/${user?.empresa_id}/dashboard/horarios`} className="flex items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground">
         <Clock className="w-4 h-4" />
         Horários
       </Link>
@@ -150,26 +140,15 @@ export function Header() {
 
   const renderUsuarioMenu = () => (
     <>
-      <Link
-        href="/buscar"
-        className="flex items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground"
-      >
+      <Link href="/buscar" className="flex items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground">
         <Calendar className="w-4 h-4" />
         Buscar Serviços
       </Link>
-
-      <Link
-        href="/agendamentos"
-        className="flex items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground"
-      >
+      <Link href="/agendamentos" className="flex items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground">
         <Clock className="w-4 h-4" />
         Meus Agendamentos
       </Link>
-
-      <Link
-        href="/perfil"
-        className="flex items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground"
-      >
+      <Link href="/perfil" className="flex items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground">
         <User className="w-4 h-4" />
         Meu Perfil
       </Link>
@@ -178,22 +157,20 @@ export function Header() {
 
   const renderNaoLogadoMenu = () => (
     <>
-      <Link
-        href="/empresas"
-        className="flex items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground"
-      >
+      <Link href="/empresas" className="flex items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground">
         <Building2 className="w-4 h-4" />
         Para Empresas
       </Link>
-      <Link
-        href="/buscar"
-        className="flex items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground"
-      >
+      <Link href="/buscar" className="flex items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground">
         <Calendar className="w-4 h-4" />
         Buscar Serviços
       </Link>
     </>
   )
+
+  // ==============================
+  // JSX principal
+  // ==============================
 
   return (
     <header className="sticky top-0 z-50 w-full border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
@@ -207,8 +184,10 @@ export function Header() {
             <span className="text-foreground">AgendaPro</span>
           </Link>
 
-          {/* Navegação Desktop */}
-          {!loading && (
+          {/* Menu principal */}
+          {!authLoaded ? (
+            <div className="text-sm text-muted-foreground">Carregando...</div>
+          ) : (
             <nav className="hidden md:flex items-center gap-6">
               {user?.tipo === "empresa"
                 ? renderEmpresaMenu()
@@ -218,31 +197,56 @@ export function Header() {
             </nav>
           )}
 
-          {/* Botões de autenticação */}
+          {/* Avatar + Dropdown */}
           <div className="hidden md:flex items-center gap-3">
             {user ? (
-              <>
-                <span className="flex items-center gap-1 text-sm font-medium text-foreground">
-                  {user.tipo === "empresa" ? (
-                    <>
-                      <Briefcase className="w-4 h-4 text-primary" />
-                      {user.nome}
-                    </>
-                  ) : (
-                    <>
-                      <User className="w-4 h-4 text-primary" />
-                      {user.nome}
-                    </>
-                  )}
-                </span>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="icon" className="relative rounded-full">
+                    <Avatar className="w-8 h-8">
+                      <AvatarFallback>
+                        {user.nome?.charAt(0).toUpperCase() || "U"}
+                      </AvatarFallback>
+                    </Avatar>
+                  </Button>
+                </DropdownMenuTrigger>
 
-                <Button variant="ghost" size="sm" onClick={handleLogout}>
-                  <LogOut className="w-4 h-4 mr-1" />
-                  Sair
-                </Button>
-              </>
+                <DropdownMenuContent align="end" className="w-56">
+                  <DropdownMenuLabel>
+                    <div className="flex flex-col">
+                      <span className="font-medium text-foreground">{user.nome}</span>
+                      <span className="text-xs text-muted-foreground">
+                        {user.tipo === "empresa" ? "Conta Empresarial" : "Usuário Comum"}
+                      </span>
+                    </div>
+                  </DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  {user.tipo === "empresa" ? (
+                    <DropdownMenuItem asChild>
+                      <Link href={`/empresas/${user.empresa_id}/dashboard`}>
+                        <LayoutDashboard className="w-4 h-4 mr-2" /> Painel da Empresa
+                      </Link>
+                    </DropdownMenuItem>
+                  ) : (
+                    <DropdownMenuItem asChild>
+                      <Link href="/perfil">
+                        <User className="w-4 h-4 mr-2" /> Meu Perfil
+                      </Link>
+                    </DropdownMenuItem>
+                  )}
+                  <DropdownMenuItem asChild>
+                    <Link href="/configuracoes">
+                      <Settings className="w-4 h-4 mr-2" /> Configurações
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={handleLogout} className="text-red-600 focus:text-red-700">
+                    <LogOut className="w-4 h-4 mr-2" /> Sair
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             ) : (
-              !loading && (
+              authLoaded && (
                 <>
                   <Button variant="ghost" size="sm" asChild>
                     <Link href="/login">Entrar</Link>
@@ -255,7 +259,7 @@ export function Header() {
             )}
           </div>
 
-          {/* Menu Mobile */}
+          {/* Botão menu mobile */}
           <button
             className="md:hidden p-2 text-muted-foreground hover:text-foreground"
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
@@ -265,7 +269,7 @@ export function Header() {
         </div>
 
         {/* Menu Mobile */}
-        {mobileMenuOpen && !loading && (
+        {mobileMenuOpen && authLoaded && (
           <div className="md:hidden py-4 border-t border-border">
             <nav className="flex flex-col gap-4">
               {user?.tipo === "empresa"
@@ -274,49 +278,22 @@ export function Header() {
                 ? renderUsuarioMenu()
                 : renderNaoLogadoMenu()}
 
-              <div className="flex flex-col gap-2 pt-4 border-t border-border">
-                {user ? (
-                  <>
-                    <span className="text-sm font-medium text-foreground px-4 flex items-center gap-1">
-                      {user.tipo === "empresa" ? (
-                        <>
-                          <Briefcase className="w-4 h-4 text-primary" />
-                          {user.nome}
-                        </>
-                      ) : (
-                        <>
-                          <User className="w-4 h-4 text-primary" />
-                          {user.nome}
-                        </>
-                      )}
-                    </span>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => {
-                        setMobileMenuOpen(false)
-                        handleLogout()
-                      }}
-                    >
-                      <LogOut className="w-4 h-4 mr-1" />
-                      Sair
-                    </Button>
-                  </>
-                ) : (
-                  <>
-                    <Button variant="ghost" size="sm" asChild>
-                      <Link href="/login" onClick={() => setMobileMenuOpen(false)}>
-                        Entrar
-                      </Link>
-                    </Button>
-                    <Button size="sm" asChild>
-                      <Link href="/cadastro" onClick={() => setMobileMenuOpen(false)}>
-                        Cadastrar
-                      </Link>
-                    </Button>
-                  </>
-                )}
-              </div>
+              {user && (
+                <div className="pt-4 border-t border-border space-y-2">
+                  <p className="px-4 text-sm font-medium">{user.nome}</p>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      setMobileMenuOpen(false)
+                      handleLogout()
+                    }}
+                  >
+                    <LogOut className="w-4 h-4 mr-1" />
+                    Sair
+                  </Button>
+                </div>
+              )}
             </nav>
           </div>
         )}
